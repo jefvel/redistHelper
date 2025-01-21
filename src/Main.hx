@@ -166,6 +166,7 @@ class Main {
 	static var redistHelperDir = "";
 	static var projectDir = "";
 	static var projectName = "unknown";
+	static var defaultProjectName = "unknown";
 	static var verbose = false;
 
 
@@ -264,6 +265,7 @@ class Main {
 			var split = projectDir.split("/");
 			projectName = split[split.length-2];
 		}
+		defaultProjectName = projectName;
 		Lib.println("Project name: "+projectName);
 
 		// Output folder
@@ -282,11 +284,45 @@ class Main {
 				? baseRedistDir+"/"+targetName+"/"+projectName
 				: baseRedistDir+"/"+targetName;
 		}
+		
+		inline function copyFiles(buildDir: String, out: String, ?extensions: Array<String>) {
+			if (extensions == null)
+				extensions = ['.pak'];
+			var out_dir = sys.FileSystem.absolutePath(haxe.io.Path.directory(buildDir));
+			for (file in sys.FileSystem.readDirectory(out_dir)) {
+				var file_name = haxe.io.Path.withoutDirectory(file);
+				for (ext in extensions)
+					if (StringTools.endsWith(file_name, ext) || ext == '*') {
+						copy('$out_dir/$file', '$out/$file_name');
+						break;
+					}
+			}
+		}
+		
+		inline function getHxmlDefine(hxmlContent: String, define:String) {
+			var definePos = hxmlContent.indexOf('-D $define');
+			if (definePos == -1)
+				definePos = hxmlContent.indexOf('-D$define');
+			if (definePos == -1)
+				return null;
+			var substr = hxmlContent.substr(definePos);
+			var line = substr.split('\n')[0];
+			var splitPos = line.indexOf('=');
+			if (splitPos == -1)
+				return null;
+			var name = line.substr(splitPos + 1);
+			return StringTools.trim(name);
+		}
 
 		// Parse HXML files given as parameters
 		for(hxml in hxmlPaths) {
 			Sys.println("Parsing "+hxml+"...");
 			var content = getFullHxml( hxml );
+			
+			var name = getHxmlDefine(content, 'windowTitle');
+			if (name != null)
+				projectName = name;
+			else projectName = defaultProjectName;
 
 			// HL
 			if( content.indexOf("-hl ")>=0 ) {
@@ -309,6 +345,7 @@ class Main {
 					// Copy HL bin file
 					var out = getHxmlOutput(hxml,"-hl");
 					copy(out, hlDir+"/hlboot.dat");
+					copyFiles(out, hlDir, ['pak']);
 
 					copyExtraFilesIn(extraFiles, hlDir);
 				}
@@ -367,6 +404,7 @@ class Main {
 
 				Lib.println("Packaging "+jsDir+"...");
 				var out = getHxmlOutput(hxml,"-js");
+				/*
 				copy(out, jsDir+"/client.js");
 
 				// Create HTML
@@ -380,6 +418,8 @@ class Main {
 				var fo = sys.io.File.write(jsDir+"/index.html", false);
 				fo.writeString(html);
 				fo.close();
+				*/
+				copyFiles(out, jsDir, ['*']);
 
 				copyExtraFilesIn(extraFiles, jsDir);
 				if( zipping )
